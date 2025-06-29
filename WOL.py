@@ -29,10 +29,10 @@ class WOLApp(tk.Tk):
         self.button_new = tk.Button(self.toolbar_frame, text="New", width=8, command=self.open_new_pc_window)
         self.button_new.pack(side=tk.LEFT, padx=4)
         # edit
-        self.button_edit = tk.Button(self.toolbar_frame, text="Edit", width=8, state=tk.DISABLED)
+        self.button_edit = tk.Button(self.toolbar_frame, text="Edit", width=8, state=tk.DISABLED, command=self.edit_pc)
         self.button_edit.pack(side=tk.LEFT, padx=2)
         # delete
-        self.button_delete = tk.Button(self.toolbar_frame, text="Delete", width=8, state=tk.DISABLED)
+        self.button_delete = tk.Button(self.toolbar_frame, text="Delete", width=8, state=tk.DISABLED, command=self.delete_pc)
         self.button_delete.pack(side=tk.LEFT, padx=2)
         # 구분선
         separator = tk.Frame(self.toolbar_frame, width=2, bg='gray')
@@ -56,6 +56,10 @@ class WOLApp(tk.Tk):
         except json.JSONDecodeError as e:
             self.open_json_error_window()
             self.pc_list = []
+
+    def save_pc_list(self):
+        with open(self.json_file, 'w', encoding='utf-8') as f:
+            json.dump({"pc_list": self.pc_list}, f, indent=2, ensure_ascii=False)
 
     def build_pc_table(self):
         # Treeview 생성
@@ -84,6 +88,10 @@ class WOLApp(tk.Tk):
         # PC 목록 로드
         self.refresh_pc_table()
 
+        # 선택 이벤트 바인딩
+        self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)  # 선택 변경 시 발생
+        self.tree.bind('<Button-1>', self.on_tree_click)
+
     def refresh_pc_table(self):
         # 기존 데이터 삭제
         for item in self.tree.get_children():
@@ -98,6 +106,36 @@ class WOLApp(tk.Tk):
                 pc.get("port", "")
             ]
             self.tree.insert('', 'end', values=values)
+    
+    def edit_pc(self):
+        pass
+
+    def delete_pc(self):
+        selected_pc = self.tree.selection()
+        pc_index = self.tree.index(selected_pc[0])
+        del self.pc_list[pc_index]
+        self.save_pc_list()
+        self.refresh_pc_table()
+
+    def on_tree_select(self, event):
+        selected_items = self.tree.selection()
+        
+        if selected_items:
+            self.button_edit.config(state=tk.NORMAL)
+            self.button_delete.config(state=tk.NORMAL)
+            self.button_wol.config(state=tk.NORMAL)
+        else:
+            self.button_edit.config(state=tk.DISABLED)
+            self.button_delete.config(state=tk.DISABLED)
+            self.button_wol.config(state=tk.DISABLED)
+
+    def on_tree_click(self, event):
+        # 클릭한 위치의 아이템 확인
+        item = self.tree.identify_row(event.y)
+        
+        # 빈 곳을 클릭했으면 선택 해제
+        if not item:
+            self.tree.selection_remove(self.tree.selection())
 
     def open_new_pc_window(self):
         new_window = NewPCWindow(self)
@@ -195,8 +233,7 @@ class NewPCWindow(tk.Toplevel):
         self.master.pc_list.append(new_pc)
         
         # json 파일에 쓰기
-        with open(self.master.json_file, 'w', encoding='utf-8') as f:
-            json.dump({"pc_list": self.master.pc_list}, f, indent=2, ensure_ascii=False)
+        self.master.save_pc_list()
         
         # pc_table 새로고침
         self.master.refresh_pc_table()
