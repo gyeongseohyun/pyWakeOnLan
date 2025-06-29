@@ -1,4 +1,7 @@
 # ip, mac 유효성 검사 필요
+# 창 크기에 따른 pc table 크기 변화 필요
+# 더블클릭, delete, 단축키
+# 아이콘 변경
 
 import tkinter as tk
 from tkinter import ttk
@@ -12,7 +15,7 @@ class WOLApp(tk.Tk):
         self.json_file = "PCList.json"
 
         self.title("Wake on LAN")
-        self.geometry("900x600")
+        self.geometry("600x600")
         self.build_layout()
 
         self.pc_list = []
@@ -54,8 +57,17 @@ class WOLApp(tk.Tk):
                 data = json.load(f)
                 self.pc_list = data.get("pc_list", [])
         except json.JSONDecodeError as e:
-            self.open_json_error_window()
-            self.pc_list = []
+            result = messagebox.askyesno(
+                "JSON File Error",
+                "The JSON file format is invalid.\nFile may be corrupted or damaged.\n\nDo you want to reset the file?",
+                icon='error'
+            )
+            if result:
+                self.pc_list = []
+                self.save_pc_list()
+            else:
+                self.destroy()
+                exit(1)
 
     def save_pc_list(self):
         with open(self.json_file, 'w', encoding='utf-8') as f:
@@ -82,8 +94,8 @@ class WOLApp(tk.Tk):
         self.tree.configure(yscrollcommand=scrollbar.set)
         
         # 테이블과 스크롤바 배치
-        self.tree.place(x=10, y=50, width=570, height=500)
-        scrollbar.place(x=580, y=50, height=500)
+        self.tree.place(x=10, y=50, width=570, height=535)
+        scrollbar.place(x=580, y=50, height=535)
 
         # PC 목록 로드
         self.refresh_pc_table()
@@ -113,9 +125,19 @@ class WOLApp(tk.Tk):
     def delete_pc(self):
         selected_pc = self.tree.selection()
         pc_index = self.tree.index(selected_pc[0])
-        del self.pc_list[pc_index]
-        self.save_pc_list()
-        self.refresh_pc_table()
+
+        # 삭제 확인 다이얼로그
+        pc_name = self.pc_list[pc_index]['name']
+        result = messagebox.askyesno(
+            "Delete Confirmation",
+            f"Are you sure you want to delete '{pc_name}'?\n\nThis action cannot be undone.",
+            icon='warning'
+        )
+
+        if result:
+            del self.pc_list[pc_index]
+            self.save_pc_list()
+            self.refresh_pc_table()
 
     def on_tree_select(self, event):
         selected_items = self.tree.selection()
@@ -139,9 +161,6 @@ class WOLApp(tk.Tk):
 
     def open_new_pc_window(self):
         new_window = NewPCWindow(self)
-    
-    def open_json_error_window(self):
-        error_window = JsonErrorWindow(self)
 
 
 class NewPCWindow(tk.Toplevel):
@@ -299,52 +318,6 @@ class NewPCWindow(tk.Toplevel):
         else:
             return False
 
-class JsonErrorWindow(tk.Toplevel):
-    def __init__(self, master=None):
-        super().__init__(master)
-        self.master = master
-        self.title("File Error")
-        self.geometry("400x200")
-        self.resizable(False, False)
-        self.build_layout()
-        
-        # 창을 모달로 설정
-        self.transient(master)
-        self.grab_set()
-    
-    def build_layout(self):
-        # error message
-        self.label_title = tk.Label(self, text="JSON File Format Error", font=("Arial", 12, "bold"))
-        self.label_title.place(x=110, y=30)
-        
-        self.label_message = tk.Label(self, text="The JSON file format is invalid.\nFile may be corrupted or damaged.", 
-                                     justify=tk.CENTER)
-        self.label_message.place(x=100, y=60)
-        
-        self.label_question = tk.Label(self, text="Do you want to reset the file?")
-        self.label_question.place(x=110, y=110)
-        
-        # buttons
-        self.button_yes = tk.Button(self, text="Yes", width=10, command=self.reset_file)
-        self.button_yes.place(x=105, y=140)
-        
-        self.button_no = tk.Button(self, text="No", width=10, command=self.exit_program)
-        self.button_no.place(x=205, y=140)
-
-    def reset_file(self):
-        with open("PCList.json", 'w', encoding='utf-8') as f:
-            json.dump({"pc_list": []}, f, indent=2, ensure_ascii=False)
-        
-        # 메인 창의 pc_list 초기화
-        if self.master:
-            self.master.pc_list = []
-        
-        self.destroy()
-    
-    def exit_program(self):
-        self.destroy()
-        if self.master:
-            self.master.quit()
 
 app = WOLApp()
 app.mainloop()
