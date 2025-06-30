@@ -2,7 +2,9 @@
 # 창 크기에 따른 pc table 크기 변화 필요
 # 더블클릭, delete, 단축키
 # 아이콘 변경
+# json_keys를 통한 유지보수성 향상
 
+from abc import ABC, abstractmethod
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
@@ -29,7 +31,7 @@ class WOLApp(tk.Tk):
         self.toolbar_frame.pack(fill=tk.X, padx=5, pady=5)
         self.toolbar_frame.pack_propagate(False)
         # new
-        self.button_new = tk.Button(self.toolbar_frame, text="New", width=8, command=self.open_new_pc_window)
+        self.button_new = tk.Button(self.toolbar_frame, text="New", width=8, command=self.new_pc)
         self.button_new.pack(side=tk.LEFT, padx=4)
         # edit
         self.button_edit = tk.Button(self.toolbar_frame, text="Edit", width=8, state=tk.DISABLED, command=self.edit_pc)
@@ -119,8 +121,11 @@ class WOLApp(tk.Tk):
             ]
             self.tree.insert('', 'end', values=values)
     
+    def new_pc(self):
+        new_window = NewPCWindow(self)
+    
     def edit_pc(self):
-        pass
+        new_window = EditPCWindow(self)
 
     def delete_pc(self):
         selected_pc = self.tree.selection()
@@ -159,18 +164,16 @@ class WOLApp(tk.Tk):
         if not item:
             self.tree.selection_remove(self.tree.selection())
 
-    def open_new_pc_window(self):
-        new_window = NewPCWindow(self)
 
-
-class NewPCWindow(tk.Toplevel):
+class PCWindowBase(tk.Toplevel):
     def __init__(self, master=None):
         super().__init__(master)
         self.master = master
-        self.title("New PC")
+        self.title(self.set_window_title())
         self.geometry("450x180")
         self.resizable(False, False)
         self.build_layout()
+        self.add_layout()
         
         # 키 바인딩
         self.bind('<Return>', self.on_enter_key)
@@ -182,6 +185,11 @@ class NewPCWindow(tk.Toplevel):
         # 창을 모달로 설정
         self.transient(master)
         self.grab_set()
+
+    @abstractmethod
+    def set_window_title(self):
+        """각 윈도우의 제목 반환"""
+        pass
 
     def build_layout(self):
         # name
@@ -205,7 +213,6 @@ class NewPCWindow(tk.Toplevel):
         self.label_port.place(x=30, y=90)
         vcmd = (self.register(self.validate_port_number), '%P')
         self.entry_port = tk.Entry(self, width=30, validate='key', validatecommand=vcmd)
-        self.entry_port.insert(0, "9")
         self.entry_port.place(x=120, y=90)
 
         # OK
@@ -215,49 +222,15 @@ class NewPCWindow(tk.Toplevel):
         self.button_Cancel = tk.Button(self, text="Cancel", width=8, command=self.destroy)
         self.button_Cancel.place(x=350, y=140)
 
-    def save_pc_list(self):
-        # Entry에서 값 가져오기
-        pc_name = self.entry_name.get()
-        ip_address = self.entry_ip.get()
-        mac_address = self.entry_mac.get()
-        port = self.entry_port.get()
-        
-        # 유효성 검사
-        if not pc_name:
-            messagebox.showerror("Input Error", "PC name is required.")
-            self.entry_name.focus()
-            return
-        if not ip_address:
-            messagebox.showerror("Input Error", "IP address is required.")
-            self.entry_ip.focus()
-            return
-        if not mac_address:
-            messagebox.showerror("Input Error", "MAC address is required.")
-            self.entry_mac.focus()
-            return
-        if not port:
-            messagebox.showerror("Input Error", "Port number is required.")
-            self.entry_port.focus()
-            return
-        
-        port = int(port)
-        
-        # pc_list에 추가
-        new_pc = {
-            "name": pc_name,
-            "ip": ip_address,
-            "mac": mac_address,
-            "port": port
-        }
-        self.master.pc_list.append(new_pc)
-        
-        # json 파일에 쓰기
-        self.master.save_pc_list()
-        
-        # pc_table 새로고침
-        self.master.refresh_pc_table()
+    @abstractmethod
+    def add_layout(self):
+        """추가적인 레이아웃 설정"""
+        pass
 
-        self.destroy()
+    @abstractmethod
+    def save_pc_list(self):
+        """데이터 저장"""
+        pass
 
     def on_enter_key(self, event):
         self.save_pc_list()
@@ -318,6 +291,119 @@ class NewPCWindow(tk.Toplevel):
         else:
             return False
 
+
+class NewPCWindow(PCWindowBase):
+    def __init__(self, master=None):
+        super().__init__(master)
+
+    def set_window_title(self):
+        return "New PC"
+    
+    def add_layout(self):
+        self.entry_port.insert(0, "9")
+
+    def save_pc_list(self):
+        # Entry에서 값 가져오기
+        pc_name = self.entry_name.get()
+        ip_address = self.entry_ip.get()
+        mac_address = self.entry_mac.get()
+        port = self.entry_port.get()
+        
+        # 유효성 검사
+        if not pc_name:
+            messagebox.showerror("Input Error", "PC name is required.")
+            self.entry_name.focus()
+            return
+        if not ip_address:
+            messagebox.showerror("Input Error", "IP address is required.")
+            self.entry_ip.focus()
+            return
+        if not mac_address:
+            messagebox.showerror("Input Error", "MAC address is required.")
+            self.entry_mac.focus()
+            return
+        if not port:
+            messagebox.showerror("Input Error", "Port number is required.")
+            self.entry_port.focus()
+            return
+        
+        port = int(port)
+        
+        # pc_list에 추가
+        new_pc = {
+            "name": pc_name,
+            "ip": ip_address,
+            "mac": mac_address,
+            "port": port
+        }
+        self.master.pc_list.append(new_pc)
+        
+        # json 파일에 쓰기
+        self.master.save_pc_list()
+        
+        # pc_table 새로고침
+        self.master.refresh_pc_table()
+
+        self.destroy()
+
+
+class EditPCWindow(PCWindowBase):
+    def __init__(self, master=None):
+        self.selected_pc = master.tree.selection()
+        super().__init__(master)
+
+    def set_window_title(self):
+        return "EDIT PC"
+
+    def add_layout(self):
+        pc_info = self.master.tree.item(self.selected_pc[0], "values")
+        self.entry_name.insert(0, f"{pc_info[0]}")
+        self.entry_ip.insert(0, f"{pc_info[1]}")
+        self.entry_mac.insert(0, f"{pc_info[2]}")
+        self.entry_port.delete(0, tk.END)
+        self.entry_port.insert(0, f"{pc_info[3]}")
+    
+    def save_pc_list(self):
+        # Entry에서 값 가져오기
+        pc_name = self.entry_name.get()
+        ip_address = self.entry_ip.get()
+        mac_address = self.entry_mac.get()
+        port = self.entry_port.get()
+        
+        # 유효성 검사
+        if not pc_name:
+            messagebox.showerror("Input Error", "PC name is required.")
+            self.entry_name.focus()
+            return
+        if not ip_address:
+            messagebox.showerror("Input Error", "IP address is required.")
+            self.entry_ip.focus()
+            return
+        if not mac_address:
+            messagebox.showerror("Input Error", "MAC address is required.")
+            self.entry_mac.focus()
+            return
+        if not port:
+            messagebox.showerror("Input Error", "Port number is required.")
+            self.entry_port.focus()
+            return
+        
+        port = int(port)
+        
+        # pc_list 수정
+        pc_index = self.master.tree.index(self.selected_pc[0])
+        self.master.pc_list[pc_index]["name"] = pc_name
+        self.master.pc_list[pc_index]["ip"] = ip_address
+        self.master.pc_list[pc_index]["mac"] = mac_address
+        self.master.pc_list[pc_index]["port"] = port
+        
+        # json 파일에 쓰기
+        self.master.save_pc_list()
+        
+        # pc_table 새로고침
+        self.master.refresh_pc_table()
+
+        self.destroy()
 
 app = WOLApp()
 app.mainloop()
