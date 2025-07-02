@@ -1,5 +1,4 @@
 # ip, mac 유효성 검사 필요
-# 창 크기에 따른 pc table 크기 변화 필요
 # 더블클릭, delete, 단축키
 # 아이콘 변경
 
@@ -19,6 +18,7 @@ class WOLApp(tk.Tk):
         self.geometry("600x600")
         self.build_layout()
 
+        # pc_list와 json에 저장할 항목들
         self.json_keys = ["name", "ip", "mac", "port"]
         self.field_labels = {
             "name": "PC Name",
@@ -26,6 +26,16 @@ class WOLApp(tk.Tk):
             "mac": "MAC Address",
             "port": "Port"
         }
+        # pc_table에 표시할 칼럼 (json_keys의 부분집합)
+        self.table_columns = ["name", "ip", "mac", "port"]
+        self.table_widths = {
+            "name": 150,
+            "ip": 150,
+            "mac": 180,
+            "port": 80
+        }
+        # 유효성 검증 (부분집합인지 확인)
+        self._validate_table_columns()
 
         self.pc_list = []
         self.load_pc_list()
@@ -83,27 +93,25 @@ class WOLApp(tk.Tk):
 
     def build_pc_table(self):
         # Treeview 생성
-        self.tree = ttk.Treeview(self, columns=self.json_keys, show='headings', height=20)
+        self.tree = ttk.Treeview(self, columns=self.table_columns, show='headings', height=20)
         
-        # 컬럼 헤더 설정
-        self.tree.heading('name', text='PC Name')
-        self.tree.heading('ip', text='IP Address')
-        self.tree.heading('mac', text='MAC Address')
-        self.tree.heading('port', text='Port')
-
-        # 컬럼 너비 설정
-        self.tree.column('name', width=150)
-        self.tree.column('ip', width=150)
-        self.tree.column('mac', width=180)
-        self.tree.column('port', width=80)
-
+        # 컬럼 헤더, 너비 설정
+        for column in self.table_columns:
+            self.tree.heading(column, text=self.field_labels[column])
+            self.tree.column(column, width=self.table_widths[column])
+        
         # 스크롤바 생성
-        scrollbar = ttk.Scrollbar(self, orient='vertical', command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
+        self.scrollbar = ttk.Scrollbar(self, orient='vertical', command=self.tree.yview)
+        self.tree.configure(yscrollcommand=self.scrollbar.set)
         
         # 테이블과 스크롤바 배치
-        self.tree.place(x=10, y=50, width=570, height=535)
-        scrollbar.place(x=580, y=50, height=535)
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, padx=(10, 0), pady=(0, 10), expand=True)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=(0, 10))
+
+        # 창 크기 조절
+        tree_width = sum(self.table_widths.values()) + 10
+        self.geometry(f"{tree_width + 30}x600")
+        self.minsize(f"{tree_width + 30}", 300)
 
         # PC 목록 로드
         self.refresh_pc_table()
@@ -119,12 +127,7 @@ class WOLApp(tk.Tk):
         
         # PC 목록 데이터 추가
         for pc in self.pc_list:
-            values = [
-                pc.get("name", ""),
-                pc.get("ip", ""),
-                pc.get("mac", ""),
-                pc.get("port", "")
-            ]
+            values = [pc.get(column, "") for column in self.table_columns]
             self.tree.insert('', 'end', values=values)
     
     def new_pc(self):
@@ -170,6 +173,13 @@ class WOLApp(tk.Tk):
         if not item:
             self.tree.selection_remove(self.tree.selection())
 
+    def _validate_table_columns(self):
+        """table_columns가 json_keys의 부분집합인지 검증"""
+        invalid_columns = set(self.table_columns) - set(self.json_keys)
+        if invalid_columns:
+            raise ValueError(f"Invalid table columns: {invalid_columns}. "
+                           f"All table columns must be in json_keys: {self.json_keys}")
+    
 
 class PCWindowBase(tk.Toplevel):
     def __init__(self, master=None):
