@@ -1,6 +1,7 @@
-# ip, mac 유효성 검사 필요
 # 더블클릭, delete, 단축키
 # 아이콘 변경
+# 다중선택
+# DDNS지원
 
 from abc import ABC, abstractmethod
 import tkinter as tk
@@ -8,6 +9,7 @@ from tkinter import ttk
 from tkinter import messagebox
 import os
 import json
+import re
 
 class WOLApp(tk.Tk):
     def __init__(self):
@@ -24,7 +26,7 @@ class WOLApp(tk.Tk):
             "name": "PC Name",
             "ip": "IP Address", 
             "mac": "MAC Address",
-            "port": "Port"
+            "port": "Port Number"
         }
         # pc_table에 표시할 칼럼 (json_keys의 부분집합)
         self.table_columns = ["name", "ip", "mac", "port"]
@@ -59,7 +61,7 @@ class WOLApp(tk.Tk):
         separator = tk.Frame(self.toolbar_frame, width=2, bg='gray')
         separator.pack(side=tk.LEFT, fill=tk.Y, padx=5, pady=5)
         # wol
-        self.button_wol = tk.Button(self.toolbar_frame, text="Wake Up", width=10, state=tk.DISABLED)
+        self.button_wol = tk.Button(self.toolbar_frame, text="Wake Up", width=10, state=tk.DISABLED, command=self.wol)
         self.button_wol.pack(side=tk.LEFT, padx=2)
         # refresh
         self.button_refresh = tk.Button(self.toolbar_frame, text="Refresh", width=8, command=self.refresh_pc_table)
@@ -153,6 +155,24 @@ class WOLApp(tk.Tk):
             self.save_pc_list()
             self.refresh_pc_table()
 
+    def wol(self):
+        selected_pc = self.tree.selection()
+
+        # 선택된 PC 정보 가져오기
+        pc_index = self.tree.index(selected_pc[0])
+        pc_info = self.pc_list[pc_index]
+        pc_name = pc_info.get('name', 'Unknown PC')
+
+        # Wake up 확인 다이얼로그
+        result = messagebox.askyesno(
+            "Wake on LAN",
+            f"Do you want to wake up '{pc_name}'?",
+            icon='question'
+        )
+
+        if result:
+            pass
+
     def on_tree_select(self, event):
         selected_items = self.tree.selection()
         
@@ -172,6 +192,55 @@ class WOLApp(tk.Tk):
         # 빈 곳을 클릭했으면 선택 해제
         if not item:
             self.tree.selection_remove(self.tree.selection())
+
+    def validate_ip_address(self, ip: str) -> bool:
+        parts = ip.split('.')
+        if len(parts) != 4:
+            return False
+        for part in parts:
+            try:
+                num = int(part)
+            except ValueError:
+                return False
+            if not 0 <= num <= 255:
+                return False
+        return True
+
+    def validate_mac_address(self, mac: str) -> bool:
+        # XX:XX:XX:XX:XX:XX 또는 XX-XX-XX-XX-XX-XX 형식
+        pattern = r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+        return bool(re.match(pattern, mac))
+
+    def validate_port_number(self, num: int) -> bool:
+        # 정수인지 확인
+        try:
+            num = int(num)
+        except ValueError:
+            return False
+        
+        # 1-65535 범위 내인지 확인
+        if 1 <= num <= 65535:
+            return True
+        else:
+            return False
+    
+    def validate_pc(self, pc: dict) -> tuple[bool, str]:
+        """
+        tuple[bool, str]: 검증 결과
+        - (True, ""): 모든 데이터가 유효함
+        - (False, key): 유효하지 않은 데이터와 필드의 키
+        """
+        # ip
+        if not self.validate_ip_address(pc["ip"]):
+            return False, "ip"
+        # mac
+        if not self.validate_mac_address(pc["mac"]):
+            return False, "mac"
+        # port
+        if not self.validate_port_number(pc["port"]):
+            return False, "port"
+        
+        return True, ""
 
     def _validate_table_columns(self):
         """table_columns가 json_keys의 부분집합인지 검증"""
@@ -227,8 +296,8 @@ class PCWindowBase(tk.Toplevel):
 
             # 엔트리 생성
             if key == "port":
-                # port는 숫자 유효성 검사 추가
-                vcmd = (self.register(self.validate_port_number), '%P')
+                # port는 정수인지 검사
+                vcmd = (self.register(self.validate_integer), '%P')
                 entry = tk.Entry(self, width=entry_width, validate='key', validatecommand=vcmd)
             else:
                 entry = tk.Entry(self, width=entry_width)
@@ -260,12 +329,22 @@ class PCWindowBase(tk.Toplevel):
 
     def apply_changes(self):
         """템플릿 메서드 - 공통 저장 로직"""
-        # 유효성 검사
+        # 필드 검사
         if not self.check_required_fields():
             return
         
         # 데이터 가져오기
         pc = self.get_entry_data()
+
+        # 유효성 검사
+        is_valid, key = self.master.validate_pc(pc)
+        if not is_valid:
+            # 에러 메시지 출력
+            messagebox.showerror("Input Error", f"Invalid {self.master.field_labels[key]} format")
+            # 포커스 이동
+            field_index = self.master.json_keys.index(key)
+            self.entries[field_index].focus()
+            return
 
         # pc_list 변경 (자식 클래스에서 구현)
         self.update_pc_list(pc)
@@ -322,22 +401,18 @@ class PCWindowBase(tk.Toplevel):
             self.button_Cancel.focus()
             return "break"
 
-    def validate_port_number(self, value: str):
+    def validate_integer(self, value: str) -> bool:
         # 빈 문자열 허용
         if value == "":
             return True
         
-        # 숫자인지 확인
+        # 정수인지 확인
         try:
             num = int(value)
         except ValueError:
             return False
         
-        # 1-65535 범위 내인지 확인
-        if 1 <= num <= 65535:
-            return True
-        else:
-            return False
+        return True
 
     def check_required_fields(self) -> bool:
         for i, key in enumerate(self.master.json_keys):
