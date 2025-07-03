@@ -1,4 +1,4 @@
-# delete, 단축키
+# 단축키
 # DDNS지원
 
 from packet_sender import send_magic_packet
@@ -41,6 +41,9 @@ class WOLApp(tk.Tk):
         self.pc_list = []
         self.load_pc_list()
         self.build_pc_table()
+
+        # 키 바인딩
+        self.bind('<Delete>', self.on_delete_key)
     
     def build_layout(self):
         # 툴바 프레임 생성
@@ -215,7 +218,13 @@ class WOLApp(tk.Tk):
         if selected_items:
             self.wol()
         return "break"
-        
+ 
+    def on_delete_key(self, event):
+        selected_items = self.tree.selection()
+        if selected_items:
+            self.delete_pc()
+        return "break"
+
     def validate_ip_address(self, ip: str) -> bool:
         parts = ip.split('.')
         if len(parts) != 4:
