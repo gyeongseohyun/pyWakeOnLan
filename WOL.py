@@ -1,5 +1,10 @@
-# 단축키
 # DDNS지원
+
+# Ctrl + n: New
+# Ctrl + e: Edit
+# Del: Delete
+# Double Click: Wake up
+# F5: Refresh
 
 from packet_sender import send_magic_packet
 from abc import ABC, abstractmethod
@@ -43,7 +48,10 @@ class WOLApp(tk.Tk):
         self.build_pc_table()
 
         # 키 바인딩
+        self.bind('<Control-n>', self.on_Ctrl_n)
+        self.bind('<Control-e>', self.on_Ctrl_e)
         self.bind('<Delete>', self.on_delete_key)
+        self.bind('<F5>', self.on_F5_Key)
     
     def build_layout(self):
         # 툴바 프레임 생성
@@ -218,11 +226,25 @@ class WOLApp(tk.Tk):
         if selected_items:
             self.wol()
         return "break"
- 
+
+    def on_Ctrl_n(self, event):
+        self.new_pc()
+        return "break"
+
+    def on_Ctrl_e(self, event):
+        selected_items = self.tree.selection()
+        if selected_items:
+            self.edit_pc()
+        return "break"
+
     def on_delete_key(self, event):
         selected_items = self.tree.selection()
         if selected_items:
             self.delete_pc()
+        return "break"
+
+    def on_F5_Key(self, event):
+        self.refresh_pc_table()
         return "break"
 
     def validate_ip_address(self, ip: str) -> bool:
