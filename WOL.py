@@ -4,7 +4,6 @@
 # Ctrl + e: Edit
 # Del: Delete
 # Double Click: Wake up
-# F5: Refresh
 
 from packet_sender import send_magic_packet
 from abc import ABC, abstractmethod
@@ -51,7 +50,6 @@ class WOLApp(tk.Tk):
         self.bind('<Control-n>', self.on_Ctrl_n)
         self.bind('<Control-e>', self.on_Ctrl_e)
         self.bind('<Delete>', self.on_delete_key)
-        self.bind('<F5>', self.on_F5_Key)
     
     def build_layout(self):
         # 툴바 프레임 생성
@@ -73,9 +71,6 @@ class WOLApp(tk.Tk):
         # wol
         self.button_wol = tk.Button(self.toolbar_frame, text="Wake Up", width=10, state=tk.DISABLED, command=self.wol)
         self.button_wol.pack(side=tk.LEFT, padx=2)
-        # refresh
-        self.button_refresh = tk.Button(self.toolbar_frame, text="Refresh", width=8, command=self.refresh_pc_table)
-        self.button_refresh.pack(side=tk.RIGHT, padx=4)
     
     def load_pc_list(self):
         if not os.path.exists(self.json_file):
@@ -241,10 +236,6 @@ class WOLApp(tk.Tk):
         selected_items = self.tree.selection()
         if selected_items:
             self.delete_pc()
-        return "break"
-
-    def on_F5_Key(self, event):
-        self.refresh_pc_table()
         return "break"
 
     def validate_ip_address(self, ip: str) -> bool:
