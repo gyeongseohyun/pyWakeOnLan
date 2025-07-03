@@ -127,7 +127,8 @@ class WOLApp(tk.Tk):
         self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)  # 선택 변경 시 발생
         self.tree.bind('<Button-1>', self.on_tree_click)
         # 키 바인딩
-        self.tree.bind('<Double-1>', self.on_double_click)
+        self.tree.bind('<Double-1>', self.on_wake_up)
+        self.tree.bind('<Return>', self.on_wake_up)
 
     def refresh_pc_table(self):
         # 기존 데이터 삭제
@@ -216,7 +217,7 @@ class WOLApp(tk.Tk):
         if not item:
             self.tree.selection_remove(self.tree.selection())
 
-    def on_double_click(self, event):
+    def on_wake_up(self, event):
         selected_items = self.tree.selection()
         if selected_items:
             self.wol()
