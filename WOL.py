@@ -3,6 +3,7 @@
 # 다중선택
 # DDNS지원
 
+from packet_sender import send_magic_packet
 from abc import ABC, abstractmethod
 import tkinter as tk
 from tkinter import ttk
@@ -171,7 +172,23 @@ class WOLApp(tk.Tk):
         )
 
         if result:
-            pass
+            # 데이터 검증
+            is_valid, key = self.validate_pc(pc_info)
+            if not is_valid:
+                messagebox.showerror("Wake on LAN Error", f"Invalid {self.field_labels[key]} format")
+                return
+            # 매직 패킷 전송
+            try:
+                send_magic_packet(pc_info["ip"], pc_info["mac"], pc_info["port"])
+                messagebox.showinfo(
+                    "Wake on LAN", 
+                    f"Wake up signal sent to '{pc_name}' successfully"
+                )
+            except Exception as e:
+                messagebox.showerror(
+                    "Wake on LAN Error", 
+                    f"Failed to send wake up signal to '{pc_name}'.\n\nError: {str(e)}"
+                )           
 
     def on_tree_select(self, event):
         selected_items = self.tree.selection()
