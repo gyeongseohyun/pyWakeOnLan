@@ -1,6 +1,4 @@
-# 더블클릭, delete, 단축키
-# 아이콘 변경
-# 다중선택
+# delete, 단축키
 # DDNS지원
 
 from packet_sender import send_magic_packet
@@ -96,7 +94,7 @@ class WOLApp(tk.Tk):
 
     def build_pc_table(self):
         # Treeview 생성
-        self.tree = ttk.Treeview(self, columns=self.table_columns, show='headings', height=20)
+        self.tree = ttk.Treeview(self, columns=self.table_columns, show='headings', height=20, selectmode='browse')
         
         # 컬럼 헤더, 너비 설정
         for column in self.table_columns:
@@ -122,6 +120,8 @@ class WOLApp(tk.Tk):
         # 선택 이벤트 바인딩
         self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)  # 선택 변경 시 발생
         self.tree.bind('<Button-1>', self.on_tree_click)
+        # 키 바인딩
+        self.tree.bind('<Double-1>', self.on_double_click)
 
     def refresh_pc_table(self):
         # 기존 데이터 삭제
@@ -210,6 +210,12 @@ class WOLApp(tk.Tk):
         if not item:
             self.tree.selection_remove(self.tree.selection())
 
+    def on_double_click(self, event):
+        selected_items = self.tree.selection()
+        if selected_items:
+            self.wol()
+        return "break"
+        
     def validate_ip_address(self, ip: str) -> bool:
         parts = ip.split('.')
         if len(parts) != 4:
