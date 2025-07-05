@@ -1,11 +1,9 @@
-# DDNS지원
-
 # Ctrl + n: New
 # Ctrl + e: Edit
 # Del: Delete
-# Double Click: Wake up
+# Double Click, Enter: Wake up
 
-from packet_sender import send_magic_packet
+from packet_sender import send_magic_packet, get_ip_address
 from abc import ABC, abstractmethod
 import tkinter as tk
 from tkinter import ttk
@@ -24,18 +22,20 @@ class WOLApp(tk.Tk):
         self.build_layout()
 
         # pc_list와 json에 저장할 항목들
-        self.json_keys = ["name", "ip", "mac", "port"]
+        self.json_keys = ["name", "ip", "ddns", "mac", "port"]
         self.field_labels = {
             "name": "PC Name",
-            "ip": "IP Address", 
+            "ip": "IP Address",
+            "ddns": "DDNS Address",
             "mac": "MAC Address",
             "port": "Port Number"
         }
         # pc_table에 표시할 칼럼 (json_keys의 부분집합)
-        self.table_columns = ["name", "ip", "mac", "port"]
+        self.table_columns = ["name", "ip", "ddns", "mac", "port"]
         self.table_widths = {
             "name": 150,
             "ip": 150,
+            "ddns": 200,
             "mac": 180,
             "port": 80
         }
@@ -44,6 +44,7 @@ class WOLApp(tk.Tk):
 
         self.pc_list = []
         self.load_pc_list()
+        self.ddns_ip_synchronize()
         self.build_pc_table()
 
         # 키 바인딩
@@ -93,6 +94,19 @@ class WOLApp(tk.Tk):
             else:
                 self.destroy()
                 exit(1)
+
+    def ddns_ip_synchronize(self):
+        """DDNS가 있는 PC들의 IP를 자동으로 동기화"""
+        for pc in self.pc_list:
+            ddns = pc.get("ddns", "")
+            if ddns:  # DDNS가 있는 경우
+                # DDNS에서 IP 추출
+                ip = get_ip_address(ddns)
+                if ip:
+                    pc["ip"] = ip
+                else:
+                    pc["ip"] = ""
+        self.save_pc_list()
 
     def save_pc_list(self):
         with open(self.json_file, 'w', encoding='utf-8') as f:
@@ -178,11 +192,17 @@ class WOLApp(tk.Tk):
             icon='question'
         )
 
+        # ddns 검증
+        # 프로그램 시작 시 ddns에 문제가 있을 경우 ip는 공란이 된다
+        if pc_info["ip"] == "" and pc_info["ddns"] != "":
+            messagebox.showerror("Wake on LAN Error", f"Invalid {self.field_labels['ddns']}")
+            return
+
         if result:
             # 데이터 검증
             is_valid, key = self.validate_pc(pc_info)
             if not is_valid:
-                messagebox.showerror("Wake on LAN Error", f"Invalid {self.field_labels[key]} format")
+                messagebox.showerror("Wake on LAN Error", f"Invalid {self.field_labels[key]}")
                 return
             # 매직 패킷 전송
             try:
@@ -251,6 +271,11 @@ class WOLApp(tk.Tk):
             if not 0 <= num <= 255:
                 return False
         return True
+    
+    def validate_ddns_address(self, ddns: str) -> bool:
+        # 호스트명.서브도메인.최상위도메인
+        pattern = r'^(?=.{1,253}$)(?!\-)([a-zA-Z0-9\-]{1,63}\.)+[a-zA-Z]{2,}$'
+        return bool(re.match(pattern, ddns))
 
     def validate_mac_address(self, mac: str) -> bool:
         # XX:XX:XX:XX:XX:XX 또는 XX-XX-XX-XX-XX-XX 형식
@@ -382,10 +407,13 @@ class PCWindowBase(tk.Toplevel):
         # 데이터 가져오기
         pc = self.get_entry_data()
 
+        # ddns 처리
+        if not self.process_ddns_to_ip(pc):
+            return
+
         # 유효성 검사
         is_valid, key = self.master.validate_pc(pc)
         if not is_valid:
-            # 에러 메시지 출력
             messagebox.showerror("Input Error", f"Invalid {self.master.field_labels[key]} format")
             # 포커스 이동
             field_index = self.master.json_keys.index(key)
@@ -400,6 +428,33 @@ class PCWindowBase(tk.Toplevel):
         self.master.refresh_pc_table()
 
         self.destroy()
+
+    def process_ddns_to_ip(self, pc: dict) -> bool:
+        ddns = pc["ddns"]
+        if ddns == "":
+            return True
+        
+        # ddns 유효성 검사
+        is_ddns_valid = self.master.validate_ddns_address(ddns)
+        if not is_ddns_valid:
+            messagebox.showerror("Input Error", f"Invalid {self.master.field_labels['ddns']} format")
+            # 포커스 이동
+            field_index = self.master.json_keys.index("ddns")
+            self.entries[field_index].focus()
+            return False
+        
+        # ddns에서 ip 추출
+        ip = get_ip_address(ddns)
+        if not ip:
+            messagebox.showerror("DDNS Error", "Failed to resolve IP address")
+            # 포커스 이동
+            field_index = self.master.json_keys.index("ddns")
+            self.entries[field_index].focus()
+            return False
+        
+        # ip 저장
+        pc["ip"] = ip
+        return True
 
     @abstractmethod
     def update_pc_list(self, pc: dict):
@@ -463,6 +518,11 @@ class PCWindowBase(tk.Toplevel):
     def check_required_fields(self) -> bool:
         for i, key in enumerate(self.master.json_keys):
             entry = self.entries[i]
+
+            # 비활성화된 엔트리는 검사 건너뛰기
+            if entry['state'] == 'disabled':
+                continue
+
             if not entry.get():
                 field_name = self.master.field_labels[key]
                 messagebox.showerror("Input Error", f"{field_name} is required.")
@@ -494,6 +554,44 @@ class NewPCWindow(PCWindowBase):
         port_index = self.master.json_keys.index("port")
         self.entries[port_index].insert(0, "9")
 
+        # IP/DDNS 상호 배타적 입력
+        self.ip_ddns_binding()
+
+    def ip_ddns_binding(self):
+        """IP/DDNS 상호 배타적 입력을 위한 이벤트 바인딩"""
+        ip_index = self.master.json_keys.index("ip")
+        ddns_index = self.master.json_keys.index("ddns")
+        self.ip_entry = self.entries[ip_index]
+        self.ddns_entry = self.entries[ddns_index]
+
+        # IP 필드 이벤트 바인딩
+        self.ip_entry.bind('<KeyRelease>', self.on_ip_change)
+        self.ip_entry.bind('<FocusOut>', self.on_ip_change)
+        
+        # DDNS 필드 이벤트 바인딩
+        self.ddns_entry.bind('<KeyRelease>', self.on_ddns_change)
+        self.ddns_entry.bind('<FocusOut>', self.on_ddns_change)
+
+    def on_ip_change(self, event=None):
+        """IP 필드 변경 시 DDNS 필드 상태 제어"""
+        if self.ip_entry.get().strip():
+            # IP가 입력되면 DDNS 비활성화
+            self.ddns_entry.config(state='disabled')
+            self.ddns_entry.delete(0, tk.END)
+        else:
+            # IP가 비어있으면 DDNS 활성화
+            self.ddns_entry.config(state='normal')
+
+    def on_ddns_change(self, event=None):
+        """DDNS 필드 변경 시 IP 필드 상태 제어"""
+        if self.ddns_entry.get().strip():
+            # DDNS가 입력되면 IP 비활성화
+            self.ip_entry.config(state='disabled')
+            self.ip_entry.delete(0, tk.END)
+        else:
+            # DDNS가 비어있으면 IP 활성화
+            self.ip_entry.config(state='normal')
+
     def update_pc_list(self, pc):
         # pc_list에 추가
         self.master.pc_list.append(pc)
@@ -512,6 +610,55 @@ class EditPCWindow(PCWindowBase):
         pc_index = self.master.tree.index(self.selected_pc[0])
         for i in range(len(self.entries)):
             self.entries[i].insert(0, f"{self.master.pc_list[pc_index][self.master.json_keys[i]]}")
+
+        # IP/DDNS 상호 배타적 입력
+        self.ip_ddns_binding()
+
+    def ip_ddns_binding(self):
+        """IP/DDNS 상호 배타적 입력을 위한 이벤트 바인딩"""
+        ip_index = self.master.json_keys.index("ip")
+        ddns_index = self.master.json_keys.index("ddns")
+        self.ip_entry = self.entries[ip_index]
+        self.ddns_entry = self.entries[ddns_index]
+
+        # 현재 로드된 데이터에 따라 초기 상태 설정
+        ddns_value = self.ddns_entry.get().strip()
+        
+        if ddns_value:
+            # DDNS가 있으면 IP 비활성화
+            self.ip_entry.config(state='disabled')
+        elif not ddns_value:
+            # DDNS가 없으면 DDNS 비활성화
+            self.ddns_entry.config(state='disabled')
+
+        # IP 필드 이벤트 바인딩
+        self.ip_entry.bind('<KeyRelease>', self.on_ip_change)
+        self.ip_entry.bind('<FocusOut>', self.on_ip_change)
+        
+        # DDNS 필드 이벤트 바인딩
+        self.ddns_entry.bind('<KeyRelease>', self.on_ddns_change)
+        self.ddns_entry.bind('<FocusOut>', self.on_ddns_change)
+
+    def on_ip_change(self, event=None):
+        """IP 필드 변경 시 DDNS 필드 상태 제어"""
+        if self.ip_entry.get().strip():
+            # IP가 입력되면 DDNS 비활성화
+            self.ddns_entry.config(state='disabled')
+            self.ddns_entry.delete(0, tk.END)
+        else:
+            # IP가 비어있으면 DDNS 활성화
+            self.ddns_entry.config(state='normal')
+
+    def on_ddns_change(self, event=None):
+        """DDNS 필드 변경 시 IP 필드 상태 제어"""
+        if self.ddns_entry.get().strip():
+            # DDNS가 입력되면 IP 비활성화
+            self.ip_entry.config(state='disabled')
+            self.ip_entry.delete(0, tk.END)
+        else:
+            # DDNS가 비어있으면 IP 활성화 및 IP 삭제
+            self.ip_entry.config(state='normal')
+            self.ip_entry.delete(0, tk.END)
 
     def update_pc_list(self, pc):
         # pc_list 수정

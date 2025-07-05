@@ -11,3 +11,10 @@ def send_magic_packet(ip_address: str, mac_address: str, port: int = 9):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         sock.sendto(packet, (ip_address, port))
+
+def get_ip_address(ddns: str) -> str | None:
+    try:
+        ip = socket.gethostbyname(ddns)
+        return ip
+    except socket.gaierror:
+        return None
