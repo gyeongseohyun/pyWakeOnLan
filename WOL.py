@@ -329,6 +329,7 @@ class PCWindowBase(tk.Toplevel):
         self.geometry("450x180")
         self.resizable(False, False)
         self.build_layout()
+        self.ip_ddns_binding()
         self.add_layout()
         
         # 키 바인딩
@@ -540,22 +541,6 @@ class PCWindowBase(tk.Toplevel):
                 value = int(value)
             data[key] = value
         return data
-    
-
-class NewPCWindow(PCWindowBase):
-    def __init__(self, master=None):
-        super().__init__(master)
-
-    def set_window_title(self):
-        return "New PC"
-    
-    def add_layout(self):
-        # port 기본값 9로 설정
-        port_index = self.master.json_keys.index("port")
-        self.entries[port_index].insert(0, "9")
-
-        # IP/DDNS 상호 배타적 입력
-        self.ip_ddns_binding()
 
     def ip_ddns_binding(self):
         """IP/DDNS 상호 배타적 입력을 위한 이벤트 바인딩"""
@@ -577,7 +562,6 @@ class NewPCWindow(PCWindowBase):
         if self.ip_entry.get().strip():
             # IP가 입력되면 DDNS 비활성화
             self.ddns_entry.config(state='disabled')
-            self.ddns_entry.delete(0, tk.END)
         else:
             # IP가 비어있으면 DDNS 활성화
             self.ddns_entry.config(state='normal')
@@ -587,10 +571,22 @@ class NewPCWindow(PCWindowBase):
         if self.ddns_entry.get().strip():
             # DDNS가 입력되면 IP 비활성화
             self.ip_entry.config(state='disabled')
-            self.ip_entry.delete(0, tk.END)
         else:
             # DDNS가 비어있으면 IP 활성화
             self.ip_entry.config(state='normal')
+
+
+class NewPCWindow(PCWindowBase):
+    def __init__(self, master=None):
+        super().__init__(master)
+
+    def set_window_title(self):
+        return "New PC"
+    
+    def add_layout(self):
+        # port 기본값 9로 설정
+        port_index = self.master.json_keys.index("port")
+        self.entries[port_index].insert(0, "9")
 
     def update_pc_list(self, pc):
         # pc_list에 추가
@@ -610,17 +606,10 @@ class EditPCWindow(PCWindowBase):
         pc_index = self.master.tree.index(self.selected_pc[0])
         for i in range(len(self.entries)):
             self.entries[i].insert(0, f"{self.master.pc_list[pc_index][self.master.json_keys[i]]}")
+        
+        self.set_initial_state()
 
-        # IP/DDNS 상호 배타적 입력
-        self.ip_ddns_binding()
-
-    def ip_ddns_binding(self):
-        """IP/DDNS 상호 배타적 입력을 위한 이벤트 바인딩"""
-        ip_index = self.master.json_keys.index("ip")
-        ddns_index = self.master.json_keys.index("ddns")
-        self.ip_entry = self.entries[ip_index]
-        self.ddns_entry = self.entries[ddns_index]
-
+    def set_initial_state(self):
         # 현재 로드된 데이터에 따라 초기 상태 설정
         ddns_value = self.ddns_entry.get().strip()
         
@@ -631,39 +620,16 @@ class EditPCWindow(PCWindowBase):
             # DDNS가 없으면 DDNS 비활성화
             self.ddns_entry.config(state='disabled')
 
-        # IP 필드 이벤트 바인딩
-        self.ip_entry.bind('<KeyRelease>', self.on_ip_change)
-        self.ip_entry.bind('<FocusOut>', self.on_ip_change)
-        
-        # DDNS 필드 이벤트 바인딩
-        self.ddns_entry.bind('<KeyRelease>', self.on_ddns_change)
-        self.ddns_entry.bind('<FocusOut>', self.on_ddns_change)
-
-    def on_ip_change(self, event=None):
-        """IP 필드 변경 시 DDNS 필드 상태 제어"""
-        if self.ip_entry.get().strip():
-            # IP가 입력되면 DDNS 비활성화
-            self.ddns_entry.config(state='disabled')
-            self.ddns_entry.delete(0, tk.END)
-        else:
-            # IP가 비어있으면 DDNS 활성화
-            self.ddns_entry.config(state='normal')
-
-    def on_ddns_change(self, event=None):
-        """DDNS 필드 변경 시 IP 필드 상태 제어"""
-        if self.ddns_entry.get().strip():
-            # DDNS가 입력되면 IP 비활성화
-            self.ip_entry.config(state='disabled')
-            self.ip_entry.delete(0, tk.END)
-        else:
-            # DDNS가 비어있으면 IP 활성화 및 IP 삭제
-            self.ip_entry.config(state='normal')
-            self.ip_entry.delete(0, tk.END)
-
     def update_pc_list(self, pc):
         # pc_list 수정
         pc_index = self.master.tree.index(self.selected_pc[0])
         self.master.pc_list[pc_index] = pc
+
+    def on_ddns_change(self, event=None):
+        super().on_ddns_change(event)
+        # ddns가 비어있으면 ip_entry도 초기화
+        if not self.ddns_entry.get().strip():
+            self.ip_entry.delete(0, tk.END)
 
 app = WOLApp()
 app.mainloop()
