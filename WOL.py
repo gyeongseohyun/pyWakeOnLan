@@ -177,6 +177,18 @@ class WOLApp(tk.Tk):
             self.save_pc_list()
             self.refresh_pc_table()
 
+            # 삭제 후 다음 pc 선택
+            items = self.tree.get_children()
+            last_pc_index = len(items) - 1
+            if last_pc_index == -1:
+                return
+            if pc_index > last_pc_index:
+                self.tree.selection_set(items[last_pc_index])
+                self.tree.focus(items[last_pc_index])
+            else:
+                self.tree.selection_set(items[pc_index])
+                self.tree.focus(items[pc_index])
+
     def wol(self):
         selected_pc = self.tree.selection()
 
@@ -630,6 +642,7 @@ class EditPCWindow(PCWindowBase):
         # ddns가 비어있으면 ip_entry도 초기화
         if not self.ddns_entry.get().strip():
             self.ip_entry.delete(0, tk.END)
+
 
 app = WOLApp()
 app.mainloop()
