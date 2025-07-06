@@ -1,8 +1,3 @@
-# Ctrl + n: New
-# Ctrl + e: Edit
-# Del: Delete
-# Double Click, Enter: Wake up
-
 from packet_sender import send_magic_packet, get_ip_address
 from abc import ABC, abstractmethod
 import tkinter as tk
@@ -11,6 +6,7 @@ from tkinter import messagebox
 import os
 import json
 import re
+
 
 class WOLApp(tk.Tk):
     def __init__(self):
